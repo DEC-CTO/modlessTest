@@ -466,7 +466,7 @@ namespace modlessTest
                 Autodesk.Revit.DB.Line getExLine = Mylib.GetExtendCurve(curve, 1500/304.8);
                 lines.Add(getExLine);
             }
-
+            //
             using(Transaction trans = new Transaction(m_doc, "ef"))
             {
                 trans.Start();
