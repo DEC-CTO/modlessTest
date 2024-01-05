@@ -34,6 +34,7 @@ using ACadSharp.Tables;
 using ACadSharp.Entities;
 using ACadSharp.Tables.Collections;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.ListView;
+using System.Security.Cryptography;
 
 namespace modlessTest
 {
@@ -378,7 +379,7 @@ namespace modlessTest
             CurveArray excurves = new CurveArray();
             foreach (Curve item in curves)
             {
-                Autodesk.Revit.DB.Line line = Mylib.GetExtendCurve(item, 1000 / 304.8);
+                Autodesk.Revit.DB.Line line = Mylib.GetExtendCurve(item, 2000 / 304.8);
                 excurves.Append(line);
             }
 
@@ -455,7 +456,7 @@ namespace modlessTest
             // 보를 선택한다.
             IList<Reference> refs = uidoc.Selection.PickObjects(Autodesk.Revit.UI.Selection.ObjectType.Element);
 
-            List<Autodesk.Revit.DB.Line> lines = new List<Autodesk.Revit.DB.Line>();
+            CurveArray ca = new CurveArray();
 
             foreach (Reference item in refs)
             {
@@ -463,20 +464,66 @@ namespace modlessTest
                 LocationCurve lc = e.Location as LocationCurve;
                 Curve curve = lc.Curve;
 
-                Autodesk.Revit.DB.Line getExLine = Mylib.GetExtendCurve(curve, 1500/304.8);
-                lines.Add(getExLine);
+                Autodesk.Revit.DB.Line getExLine = Mylib.GetExtendCurve(curve, 2000/304.8);
+                ca.Append(getExLine);
             }
-            
-            using(Transaction trans = new Transaction(m_doc, "ef"))
-            {
-                trans.Start();
 
-                foreach (Autodesk.Revit.DB.Line item in lines)
+            List<IList<CurveLoop>> curves1 = new List<IList<CurveLoop>>();
+
+            using (TransactionGroup transGroup = new TransactionGroup(m_doc))
+            {
+                transGroup.Start();
+
+                using (Transaction trans = new Transaction(m_doc, "create"))
                 {
-                    DetailCurve dc = m_doc.Create.NewDetailCurve(m_doc.ActiveView, item);
+                    trans.Start();
+                    //SketchPlane sp = SketchPlane.Create(m_doc, m_doc.ActiveView.GenLevel.Id);
+
+                    ModelCurveArray mca = m_doc.Create.NewRoomBoundaryLines(m_doc.ActiveView.SketchPlane, ca, m_doc.ActiveView);
+                    trans.Commit();
                 }
 
-                trans.Commit();
+                Level level = m_doc.ActiveView.GenLevel;
+                using (Transaction t = new Transaction(m_doc, "Topologie"))
+                {
+                    t.Start();
+                    PlanTopology pt = m_doc.get_PlanTopology(level);
+                    foreach (PlanCircuit pc in pt.Circuits)
+                    {
+                        if (!pc.IsRoomLocated)
+                        {
+                            Room r = m_doc.Create.NewRoom(null, pc);
+                            CurveLoop cl = new CurveLoop();
+                            IList<IList<BoundarySegment>> loops = r.GetBoundarySegments(new SpatialElementBoundaryOptions());
+                            if (loops.Count == 0) continue;
+
+                            IList<BoundarySegment> pp = loops.First();
+                            foreach (BoundarySegment item in pp)
+                            {
+                                cl.Append(item.GetCurve());
+                            }
+
+                            IList<CurveLoop> lll = new List<CurveLoop>();
+                            lll.Add(cl);
+                            curves1.Add(lll);
+                        }
+                    }
+
+                    t.Commit();
+                }
+
+                transGroup.RollBack();
+            }
+
+            using (Transaction t = new Transaction(m_doc, "Create slab"))
+            {
+                t.Start();
+                foreach (IList<CurveLoop> item in curves1)
+                {
+                    Floor f = Floor.Create(m_doc, item, new FilteredElementCollector(m_doc).OfCategory(BuiltInCategory.OST_Floors).OfClass(typeof(FloorType)).FirstElementId(), m_doc.ActiveView.GenLevel.Id);
+                }
+
+                t.Commit();
             }
         }
     }
