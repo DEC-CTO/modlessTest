@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Application modlessTest</Name>
+    <Assembly>modlessTest.dll</Assembly>
+    <FullClassName>modlessTest.App</FullClassName>
+    <ClientId>17DB4774-1973-47EE-9610-491A9FC53C03</ClientId>	  
+    <VendorId>FlorBIM</VendorId>
+    <VendorDescription>FlorBIM</VendorDescription>
+  </AddIn>
+</RevitAddIns>
