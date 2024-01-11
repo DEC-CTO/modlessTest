@@ -119,5 +119,10 @@ namespace modlessTest
         {
             MakeRequest(RequestId.deckSlab2);
         }
+
+        private void button9_Click(object sender, EventArgs e)
+        {
+            MakeRequest(RequestId.gang);
+        }
     }
 }

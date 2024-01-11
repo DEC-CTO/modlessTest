@@ -12,7 +12,8 @@ namespace modlessTest
         readCAD = 4,
         CreateBeams = 5,
         deckslab = 6,
-        deckSlab2 = 7
+        deckSlab2 = 7,
+        gang =8
     }
 
     public class Request

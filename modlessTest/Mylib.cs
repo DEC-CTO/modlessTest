@@ -238,6 +238,52 @@ namespace modlessTest
             return returnstring;
         }
 
+        public static List<string> linedata_sort(string filepath, double limits)
+        {
+            limits = 801;
+
+            List<string> returnstring = new List<string>();
+            CadDocument docCad = DwgReader.Read(filepath);
+            List<Entity> entities = new List<Entity>(docCad.Entities);
+
+
+            List<Autodesk.Revit.DB.Line> LongCurve = new List<Autodesk.Revit.DB.Line>();
+            List<Autodesk.Revit.DB.Line> shortCurve = new List<Autodesk.Revit.DB.Line>();
+
+            List<Polyline> PolylineCurve = new List<Polyline>();
+
+
+            foreach (Entity item in entities)
+            {
+                ACadSharp.ObjectType obj = item.ObjectType;
+                if (obj == ACadSharp.ObjectType.TEXT)
+                {
+                    continue;
+                }
+                else if (obj == ACadSharp.ObjectType.LINE)
+                {
+                    ACadSharp.Entities.Line line = item as ACadSharp.Entities.Line;
+                    Autodesk.Revit.DB.Line getLine = ConvertRevitLine(line);
+
+                    if (getLine.Length * 304.8 > limits)
+                    {
+                        LongCurve.Add(getLine);
+                    }
+
+                    else if ((getLine.Length * 304.8 <= limits))
+                    {
+                        shortCurve.Add(getLine);
+                    }
+                }
+
+                else if (obj == ACadSharp.ObjectType.LWPOLYLINE)
+                {
+                    PolylineCurve.Add(item as ACadSharp.Entities.Polyline);
+                }
+            }
+
+            return returnstring;
+        }
 
         public static void linedataText(Document doc, string filepath, double limits)
         {
@@ -332,7 +378,7 @@ namespace modlessTest
             }
             catch (Exception e) 
             {
-                MessageBox.Show(e.Message);
+                return null;
             }
 
             return line1;
@@ -350,11 +396,5 @@ namespace modlessTest
             Autodesk.Revit.DB.Line line = Autodesk.Revit.DB.Line.CreateBound(exp1, exp2);
             return line;
         }
-    }
-
-
-    public class linedata
-    {
-        
     }
 }

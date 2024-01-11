@@ -95,6 +95,11 @@ namespace modlessTest
                             _deckSlab2(uiapp);
                             break;
                         }
+                    case RequestId.gang:
+                        {
+                            _gang(uiapp);
+                            break;
+                        }
                 }
             }
             finally
@@ -102,6 +107,172 @@ namespace modlessTest
                 App.thisApp.WakeFormUp();
             }
             return;
+        }
+
+        private void _gang(UIApplication uiapp)
+        {
+            UIDocument uidoc = uiapp.ActiveUIDocument;
+            m_uidoc = uidoc;
+            m_doc = m_uidoc.Document;
+            Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
+            Autodesk.Revit.Creation.Application CreationApp = app.Create;
+
+            List<string> filepath = Mylib.GetDWGLink(m_doc);
+
+            CadDocument docCad = DwgReader.Read(filepath[0]);
+            List<Entity> entities = new List<Entity>(docCad.Entities);
+
+            FilteredElementCollector col = new FilteredElementCollector(m_doc).OfCategory(BuiltInCategory.OST_StructuralFraming).OfClass(typeof(FamilyInstance));
+
+            Dictionary<FamilyInstance, XYZ> dixdix = new Dictionary<FamilyInstance, XYZ>();
+
+            foreach (FamilyInstance item in col)
+            {
+                if(item.Category.Id.IntegerValue == (int)BuiltInCategory.OST_StructuralFraming)
+                {
+                    LocationCurve lc = item.Location as LocationCurve;
+                    Curve c = lc.Curve;
+                    dixdix.Add(item, c.Evaluate(0.5, true));
+                }
+            }
+
+            List<compareData> cd = new List<compareData>();
+
+            foreach (Entity item in entities)
+            {
+                ACadSharp.ObjectType obj = item.ObjectType;
+                if (obj == ACadSharp.ObjectType.LINE)
+                {
+                    Autodesk.Revit.DB.Line line = Mylib.ConvertRevitLine(item as ACadSharp.Entities.Line);
+                    if (line == null) continue;
+
+                    if (line.Length * 304.8 < 801)
+                    {
+                        compareData cd1 = new compareData();
+                        cd1.m_mid = line.Evaluate(0.5, true);
+                        cd1.m_infor = "Pin";
+                        cd.Add(cd1);
+                    }
+                }
+
+                else if (obj == ACadSharp.ObjectType.LWPOLYLINE)
+                {
+                    ACadSharp.Entities.LwPolyline ee = item as ACadSharp.Entities.LwPolyline;
+                    IEnumerable<Entity> eee = ee.Explode();
+                    Entity en = eee.First();
+                    Autodesk.Revit.DB.Line line = Mylib.ConvertRevitLine(en as ACadSharp.Entities.Line);
+                    if (line == null) continue;
+
+                    compareData cd1 = new compareData();
+                    cd1.m_mid = line.Evaluate(0.5, true);
+                    cd1.m_infor = "Moment";
+                    cd.Add(cd1);
+                }
+            }
+
+            using(Transaction trans = new Transaction(m_doc, "Change Moment"))
+            {
+                trans.Start();
+                foreach (Entity item in entities)
+                {
+                    ACadSharp.ObjectType obj = item.ObjectType;
+                    if (obj == ACadSharp.ObjectType.LINE)
+                    {
+                        Autodesk.Revit.DB.Line line = Mylib.ConvertRevitLine(item as ACadSharp.Entities.Line);
+                        if (line == null) continue;
+
+                        if (line.Length * 304.8 >= 801)
+                        {
+                            var sort = from n in dixdix orderby line.Evaluate(0.5, true).DistanceTo(n.Value) ascending select n;
+                            FamilyInstance findinstance = sort.First().Key;
+
+                            XYZ sp = line.GetEndPoint(0);
+                            var sortsp = from n in cd orderby sp.DistanceTo(n.m_mid) ascending select n;
+                            string infor = sortsp.First().m_infor;
+
+                            XYZ ep = line.GetEndPoint(1);
+                            var sortsp1 = from n in cd orderby ep.DistanceTo(n.m_mid) ascending select n;
+                            string infor1 = sortsp1.First().m_infor;
+
+
+                            Parameter param = findinstance.get_Parameter(BuiltInParameter.STRUCT_CONNECTION_BEAM_START);
+                            Parameter param1 = findinstance.get_Parameter(BuiltInParameter.STRUCT_CONNECTION_BEAM_END);
+
+                            StructuralConnectionType st = null;
+                            FilteredElementCollector cococo = new FilteredElementCollector(m_doc).OfClass(typeof(StructuralConnectionType));
+
+                            LocationCurve lc = findinstance.Location as LocationCurve;
+                            Curve cc = lc.Curve;
+
+                            XYZ fsp = cc.GetEndPoint(0);
+                            XYZ fep = cc.GetEndPoint(1);
+
+                            double t = sp.DistanceTo(fsp);
+                            double t1 = sp.DistanceTo(fep);
+
+                            if (t > t1)
+                            {
+                                foreach (StructuralConnectionType eee in cococo)
+                                {
+                                    if (eee.Name == infor1)
+                                    {
+                                        st = eee;
+                                        break;
+                                    }
+                                }
+
+                                string NewId = st.Id.ToString();
+                                int idInt = Convert.ToInt32(NewId);
+                                param1.Set(new ElementId(idInt));
+
+                                foreach (StructuralConnectionType eee in cococo)
+                                {
+                                    if (eee.Name == infor)
+                                    {
+                                        st = eee;
+                                        break;
+                                    }
+                                }
+
+                                string NewId1 = st.Id.ToString();
+                                int idInt1 = Convert.ToInt32(NewId1);
+                                param.Set(new ElementId(idInt1));
+                            }
+
+                            else
+                            {
+                                foreach (StructuralConnectionType eee in cococo)
+                                {
+                                    if (eee.Name == infor)
+                                    {
+                                        st = eee;
+                                        break;
+                                    }
+                                }
+
+                                string NewId = st.Id.ToString();
+                                int idInt = Convert.ToInt32(NewId);
+                                param.Set(new ElementId(idInt));
+
+                                foreach (StructuralConnectionType eee in cococo)
+                                {
+                                    if (eee.Name == infor1)
+                                    {
+                                        st = eee;
+                                        break;
+                                    }
+                                }
+
+                                string NewId1 = st.Id.ToString();
+                                int idInt1 = Convert.ToInt32(NewId1);
+                                param1.Set(new ElementId(idInt1));
+
+                            }
+                        }
+                    }
+                }
+                trans.Commit();
+            }
         }
 
         private void CreateBOJ(UIApplication uiapp)
@@ -335,9 +506,44 @@ namespace modlessTest
             Autodesk.Revit.Creation.Application CreationApp = app.Create;
 
             List<string> filepath = Mylib.GetDWGLink(m_doc);
-            List<string> getdatas = Mylib.linedata(filepath[0], 800);
+
+            CadDocument docCad = DwgReader.Read(filepath[0]);
+            List<Entity> entities = new List<Entity>(docCad.Entities);
+
+            FilteredElementCollector col = new FilteredElementCollector(m_doc).OfCategory(BuiltInCategory.OST_StructuralFraming).OfClass(typeof(FamilyInstance));
 
 
+            Dictionary<XYZ, string> dix = new Dictionary<XYZ, string>();
+
+            foreach (Entity item in entities)
+            {
+                ACadSharp.ObjectType obj = item.ObjectType;
+                if (obj == ACadSharp.ObjectType.LINE)
+                {
+                    Autodesk.Revit.DB.Line line = Mylib.ConvertRevitLine(item as ACadSharp.Entities.Line);
+                    if(line.Length * 304.8 < 801)
+                    {
+                        dix.Add(line.Evaluate(0.5, true), "PIN");
+                    }
+                }
+
+                else if(obj == ACadSharp.ObjectType.LWPOLYLINE)
+                {
+                    ACadSharp.Entities.LwPolyline ee = item as ACadSharp.Entities.LwPolyline;
+                    
+                }
+            }
+
+            foreach (Entity item in entities)
+            {
+                ACadSharp.ObjectType obj = item.ObjectType;
+                if (obj == ACadSharp.ObjectType.LINE)
+                {
+                    Autodesk.Revit.DB.Line line = Mylib.ConvertRevitLine(item as ACadSharp.Entities.Line);
+                    XYZ sp = line.GetEndPoint(0);
+
+                }
+            }
         }
 
         private void _CreateBeams(UIApplication uiapp)
@@ -352,7 +558,6 @@ namespace modlessTest
             Mylib.linedataText(m_doc, filepath[0], 800);
 
         }
-
 
         private void _deckslab(UIApplication uiapp)
         {
@@ -443,7 +648,6 @@ namespace modlessTest
             }
         }
 
-
         private void _deckSlab2(UIApplication uiapp)
         {
             UIDocument uidoc = uiapp.ActiveUIDocument;
@@ -526,5 +730,22 @@ namespace modlessTest
                 t.Commit();
             }
         }
+    }
+
+    public class linedata
+    {
+        public Autodesk.Revit.DB.Line m_cadLine { get; set; }
+        public XYZ sp {  get; set; }
+        public XYZ ep { get; set; }
+
+        public string spInfor { get; set;}
+        public string epInfor { get; set; }
+
+    }
+
+    public class compareData
+    {
+        public XYZ m_mid { get; set; }
+        public string m_infor {  get; set; }
     }
 }
